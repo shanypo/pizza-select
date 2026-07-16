@@ -6,9 +6,69 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// Robust, high-quality public sound effects
-const READY_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2869/2869-200.wav'; // Soft, warm bell
-const ADMIN_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2019/2019-200.wav'; // Cheerful retro order chime
+// ============================================================================
+// BULLETPROOF SYNTHESIZED SOUND EFFECTS (No external files or CORS issues!)
+// ============================================================================
+const playReadySound = () => {
+  try {
+    const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    
+    // Play a beautiful double kitchen bell "Ding-Ding!"
+    const playBell = (delay: number, pitch: number) => {
+      const osc = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(pitch, audioCtx.currentTime + delay);
+      
+      gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime + delay);
+      // Beautiful exponentially decaying chime ring
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + delay + 1.2);
+      
+      osc.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      
+      osc.start(audioCtx.currentTime + delay);
+      osc.stop(audioCtx.currentTime + delay + 1.2);
+    };
+
+    playBell(0, 880);      // High A note
+    playBell(0.12, 1046.5); // Higher C note shortly after
+  } catch (e) {
+    console.warn("Audio synthesis blocked or failed", e);
+  }
+};
+
+const playAdminSound = () => {
+  try {
+    const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    
+    // Warm, welcoming digital order chime (Arpeggio: C -> E -> G)
+    const playNote = (delay: number, frequency: number, duration: number) => {
+      const osc = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      
+      osc.type = 'triangle'; // Soft retro triangle wave
+      osc.frequency.setValueAtTime(frequency, audioCtx.currentTime + delay);
+      
+      gainNode.gain.setValueAtTime(0.25, audioCtx.currentTime + delay);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + delay + duration);
+      
+      osc.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      
+      osc.start(audioCtx.currentTime + delay);
+      osc.stop(audioCtx.currentTime + delay + duration);
+    };
+
+    playNote(0, 523.25, 0.3);    // C5
+    playNote(0.1, 659.25, 0.3);  // E5
+    playNote(0.2, 783.99, 0.4);  // G5
+  } catch (e) {
+    console.warn("Audio synthesis blocked or failed", e);
+  }
+};
+// ============================================================================
 
 type Topping = {
   id: number;
@@ -96,29 +156,8 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePop);
   }, []);
 
- // Real-time synchronization & Interactive Audio Setup
+  // Real-time synchronization
   useEffect(() => {
-    // 1. Silent Pre-load to bypass aggressive browser autoplay blocks
-    const unlockAudio = () => {
-      const readyAudio = new Audio(READY_SOUND_URL);
-      const adminAudio = new Audio(ADMIN_SOUND_URL);
-      
-      // Set volume to 0, play and pause instantly to "wake up" the browser audio context
-      readyAudio.volume = 0;
-      adminAudio.volume = 0;
-      
-      void readyAudio.play().then(() => readyAudio.pause()).catch(() => undefined);
-      void adminAudio.play().then(() => adminAudio.pause()).catch(() => undefined);
-      
-      // Remove listeners once unlocked
-      window.removeEventListener('click', unlockAudio);
-      window.removeEventListener('touchstart', unlockAudio);
-    };
-
-    window.addEventListener('click', unlockAudio);
-    window.addEventListener('touchstart', unlockAudio);
-
-    // 2. Real-time Channel Setup
     const channel = supabase.channel('pizza-party', {
       config: { broadcast: { self: false } }
     });
@@ -143,23 +182,11 @@ export default function App() {
         }
       })
       .on('broadcast', { event: 'pizza_ready_sound' }, () => {
-        try {
-          const audio = new Audio(READY_SOUND_URL);
-          audio.volume = 0.8;
-          void audio.play().catch((err) => console.log("Audio play blocked:", err));
-        } catch (err) {
-          console.error("Audio error:", err);
-        }
+        playReadySound();
       })
       .on('broadcast', { event: 'new_order_sound' }, () => {
         if (getCurrentRoute() === 'admin') {
-          try {
-            const audio = new Audio(ADMIN_SOUND_URL);
-            audio.volume = 0.8;
-            void audio.play().catch((err) => console.log("Audio play blocked:", err));
-          } catch (err) {
-            console.error("Audio error:", err);
-          }
+          playAdminSound();
         }
       });
 
@@ -175,8 +202,6 @@ export default function App() {
     channelRef.current = channel;
 
     return () => {
-      window.removeEventListener('click', unlockAudio);
-      window.removeEventListener('touchstart', unlockAudio);
       void supabase.removeChannel(channel);
     };
   }, []);
@@ -207,6 +232,8 @@ export default function App() {
   }, [submissions]);
 
   const toggleSelection = (toppingId: number) => {
+    // We can run a tiny low-volume chime on interaction to instantly bypass mobile browser mute blocks!
+    playReadySound(); 
     setSelectedToppings((prev) =>
       prev.includes(toppingId) ? prev.filter((item) => item !== toppingId) : [...prev, toppingId],
     );
@@ -318,6 +345,9 @@ export default function App() {
     setNotices(nextNotices);
     setStatus(newStatus);
 
+    // Play local host-side sound feedback instantly
+    playReadySound();
+
     broadcastNewState({ toppings, submissions: nextSubmissions, notices: nextNotices, status: newStatus });
     
     if (channelRef.current) {
@@ -393,7 +423,7 @@ export default function App() {
             <form onSubmit={handleSubmitChoice} className="stack">
               <label>
                 <span>What is your name?</span>
-                <input value={guestName} onChange={(event) => setGuestName(event.target.value)} placeholder="Who is designing this slice?" />
+                <input value={guestName} onChange={(event) => setGuestName(event.target.value)} placeholder="Your name, pizza lover! ✨" />
               </label>
 
               <div className="pizza-card">
@@ -409,7 +439,10 @@ export default function App() {
                       type="button"
                       className={`topping-option ${selectedToppings.includes(topping.id) ? 'selected' : ''}`}
                       style={{ borderColor: selectedToppings.includes(topping.id) ? topping.color : '#eae5dc' }}
-                      onClick={() => toggleSelection(topping.id)}
+                      onClick={() => {
+                        // Triggers an initial interaction sound to instantly unlock WebAudio permissions on the phone
+                        toggleSelection(topping.id);
+                      }}
                     >
                       <span className="chip-name">
                         <span className="dot" style={{ backgroundColor: topping.color }} />
@@ -481,7 +514,6 @@ export default function App() {
                 </div>
               </div>
               
-              {/* Redesigned Reset Container */}
               <div className="reset-container">
                 <button type="button" className="reset-btn" onClick={handleResetParty}>
                   Reset Pizza Night

@@ -138,7 +138,10 @@ export default function App() {
   const [newTopping, setNewTopping] = useState('');
   const [route, setRoute] = useState<'user' | 'admin'>(getCurrentRoute);
   const [status, setStatus] = useState('Design your dream slice below and send it straight to the oven!');
-const [nameError, setNameError] = useState(false);
+  
+  // Audio Permission / Interaction Tracking
+  const [soundEnabled, setSoundEnabled] = useState(false);
+
   const channelRef = useRef<any>(null);
   const stateRef = useRef({ toppings, submissions, notices, status });
 
@@ -227,28 +230,27 @@ const [nameError, setNameError] = useState(false);
     window.history.pushState({}, '', targetPath);
   };
 
-  const totalSelections = useMemo(() => {
-    return submissions.reduce((sum, submission) => sum + submission.toppings.length, 0);
-  }, [submissions]);
+  // Count total pizzas ordered (from submissions)
+  const totalPizzas = submissions.length;
 
-  // Clean, completely silent toggle!
+  // Silent topping select (no sound interaction blocker)
   const toggleSelection = (toppingId: number) => {
     setSelectedToppings((prev) =>
       prev.includes(toppingId) ? prev.filter((item) => item !== toppingId) : [...prev, toppingId],
     );
   };
 
-const handleSubmitChoice = (event: React.FormEvent) => {
+  const enableSoundsClick = () => {
+    setSoundEnabled(true);
+    // Directly plays a quick audio test to gain immediate authorization
+    playAdminSound();
+  };
+
+  const handleSubmitChoice = (event: React.FormEvent) => {
     event.preventDefault();
 
     if (!guestName.trim()) {
-      setNameError(true);
       setStatus('Could you tell us your name first? 😊');
-      
-      // Automatically clear the red shake highlight after 2 seconds
-      setTimeout(() => {
-        setNameError(false);
-      }, 2000);
       return;
     }
 
@@ -276,7 +278,6 @@ const handleSubmitChoice = (event: React.FormEvent) => {
     setStatus(newStatus);
     setGuestName('');
     setSelectedToppings([]);
-    setNameError(false); // Clear any error
 
     broadcastNewState({ toppings, submissions: nextSubmissions, notices, status: newStatus });
     
@@ -287,6 +288,7 @@ const handleSubmitChoice = (event: React.FormEvent) => {
       });
     }
   };
+
   const handleAddTopping = (event: React.FormEvent) => {
     event.preventDefault();
 
@@ -350,7 +352,7 @@ const handleSubmitChoice = (event: React.FormEvent) => {
     setNotices(nextNotices);
     setStatus(newStatus);
 
-    // Play local host-side sound feedback instantly
+    // Play local sound
     playReadySound();
 
     broadcastNewState({ toppings, submissions: nextSubmissions, notices: nextNotices, status: newStatus });
@@ -409,7 +411,13 @@ const handleSubmitChoice = (event: React.FormEvent) => {
           <section className="card">
             <div className="card-header">
               <h2>Design Your Slice</h2>
-              <span>{totalSelections} delicious cravings</span>
+              <span>
+                {totalPizzas === 0 
+                  ? 'No pizzas ordered yet' 
+                  : totalPizzas === 1 
+                  ? '1 pizza ordered' 
+                  : `${totalPizzas} pizzas ordered`}
+              </span>
             </div>
 
             <div className="notice-stack">
@@ -425,25 +433,10 @@ const handleSubmitChoice = (event: React.FormEvent) => {
               )}
             </div>
 
-          <form onSubmit={handleSubmitChoice} className="stack">
+            <form onSubmit={handleSubmitChoice} className="stack">
               <label>
                 <span>What is your name?</span>
-                <input 
-                  value={guestName} 
-                  onChange={(event) => {
-                    setGuestName(event.target.value);
-                    if (event.target.value.trim()) {
-                      setNameError(false); // Clear red border as soon as they start typing
-                    }
-                  }} 
-                  className={nameError ? 'input-error' : ''}
-                  placeholder="Your name, pizza lover! ✨" 
-                />
-                {nameError && (
-                  <span className="error-text">
-                    ⚠️ We need your name so we know whose pizza this is!
-                  </span>
-                )}
+                <input value={guestName} onChange={(event) => setGuestName(event.target.value)} placeholder="Your name, pizza lover! ✨" />
               </label>
 
               <div className="pizza-card">
@@ -473,17 +466,7 @@ const handleSubmitChoice = (event: React.FormEvent) => {
                 </div>
               </div>
 
-              {/* Friendly dynamic button helper */}
-              <button 
-                className="primary-btn" 
-                type="submit"
-                style={{
-                  backgroundColor: !guestName.trim() ? '#8e8476' : '#443c33',
-                  transition: 'background-color 0.3s ease'
-                }}
-              >
-                {!guestName.trim() ? 'Please Enter Your Name to Order 🍕' : "Send to Chef's Board 🍕"}
-              </button>
+              <button className="primary-btn" type="submit">Send to Chef's Board 🍕</button>
             </form>
           </section>
 
@@ -518,6 +501,42 @@ const handleSubmitChoice = (event: React.FormEvent) => {
             </div>
 
             <div className="stack">
+              {/* Interaction sound bypass control banner */}
+              <div 
+                style={{
+                  background: soundEnabled ? '#e6f4ea' : '#fce8e6',
+                  color: soundEnabled ? '#137333' : '#c5221f',
+                  padding: '12px 16px',
+                  borderRadius: '12px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  fontWeight: '600',
+                  fontSize: '0.9rem',
+                  border: `1px solid ${soundEnabled ? '#81c995' : '#f28b82'}`
+                }}
+              >
+                <span>{soundEnabled ? '🔔 Sound Alerts Active' : '🔇 Audio Blocked by Browser'}</span>
+                {!soundEnabled && (
+                  <button 
+                    type="button" 
+                    onClick={enableSoundsClick}
+                    style={{
+                      background: '#c5221f',
+                      color: '#fff',
+                      border: 'none',
+                      padding: '6px 12px',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontSize: '0.8rem',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    Click to Enable Sounds
+                  </button>
+                )}
+              </div>
+
               <form onSubmit={handleAddTopping} className="stack">
                 <label>
                   <span>Introduce a new ingredient</span>

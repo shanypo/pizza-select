@@ -138,7 +138,7 @@ export default function App() {
   const [newTopping, setNewTopping] = useState('');
   const [route, setRoute] = useState<'user' | 'admin'>(getCurrentRoute);
   const [status, setStatus] = useState('Design your dream slice below and send it straight to the oven!');
-
+const [nameError, setNameError] = useState(false);
   const channelRef = useRef<any>(null);
   const stateRef = useRef({ toppings, submissions, notices, status });
 
@@ -238,11 +238,17 @@ export default function App() {
     );
   };
 
-  const handleSubmitChoice = (event: React.FormEvent) => {
+const handleSubmitChoice = (event: React.FormEvent) => {
     event.preventDefault();
 
     if (!guestName.trim()) {
+      setNameError(true);
       setStatus('Could you tell us your name first? 😊');
+      
+      // Automatically clear the red shake highlight after 2 seconds
+      setTimeout(() => {
+        setNameError(false);
+      }, 2000);
       return;
     }
 
@@ -270,6 +276,7 @@ export default function App() {
     setStatus(newStatus);
     setGuestName('');
     setSelectedToppings([]);
+    setNameError(false); // Clear any error
 
     broadcastNewState({ toppings, submissions: nextSubmissions, notices, status: newStatus });
     
@@ -280,7 +287,6 @@ export default function App() {
       });
     }
   };
-
   const handleAddTopping = (event: React.FormEvent) => {
     event.preventDefault();
 
@@ -419,10 +425,25 @@ export default function App() {
               )}
             </div>
 
-            <form onSubmit={handleSubmitChoice} className="stack">
+          <form onSubmit={handleSubmitChoice} className="stack">
               <label>
                 <span>What is your name?</span>
-                <input value={guestName} onChange={(event) => setGuestName(event.target.value)} placeholder="Your name, pizza lover! ✨" />
+                <input 
+                  value={guestName} 
+                  onChange={(event) => {
+                    setGuestName(event.target.value);
+                    if (event.target.value.trim()) {
+                      setNameError(false); // Clear red border as soon as they start typing
+                    }
+                  }} 
+                  className={nameError ? 'input-error' : ''}
+                  placeholder="Your name, pizza lover! ✨" 
+                />
+                {nameError && (
+                  <span className="error-text">
+                    ⚠️ We need your name so we know whose pizza this is!
+                  </span>
+                )}
               </label>
 
               <div className="pizza-card">
@@ -452,7 +473,17 @@ export default function App() {
                 </div>
               </div>
 
-              <button className="primary-btn" type="submit">Send to Chef's Board 🍕</button>
+              {/* Friendly dynamic button helper */}
+              <button 
+                className="primary-btn" 
+                type="submit"
+                style={{
+                  backgroundColor: !guestName.trim() ? '#8e8476' : '#443c33',
+                  transition: 'background-color 0.3s ease'
+                }}
+              >
+                {!guestName.trim() ? 'Please Enter Your Name to Order 🍕' : "Send to Chef's Board 🍕"}
+              </button>
             </form>
           </section>
 

@@ -484,3 +484,26 @@ input:focus {
     align-items: center;
   }
 }
+
+/* Gentle shake animation to guide the user's focus */
+@keyframes soft-shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-4px); }
+  40%, 80% { transform: translateX(4px); }
+}
+
+.input-error {
+  border-color: #d9534f !important;
+  background-color: #fff5f5 !important;
+  animation: soft-shake 0.4s ease-in-out;
+}
+
+.error-text {
+  color: #d9534f;
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}

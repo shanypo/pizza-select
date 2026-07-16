@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
-// 1. Initialize Supabase Client using Vite environment variables
+// Initialize Supabase Client
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
@@ -78,41 +78,41 @@ export default function App() {
   const [route, setRoute] = useState<'user' | 'admin'>(getCurrentRoute);
   const [status, setStatus] = useState('Build your dream slice and share it with the group.');
 
-  // Save changes locally as back-up
+  // Store the active Supabase channel reference
+  const channelRef = useRef<any>(null);
+
+  // Save changes locally
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ toppings, submissions, notices }));
   }, [toppings, submissions, notices]);
 
-  // Handle browser back/forward routing
+  // Handle routing
   useEffect(() => {
     const handlePop = () => setRoute(getCurrentRoute());
     window.addEventListener('popstate', handlePop);
     return () => window.removeEventListener('popstate', handlePop);
   }, []);
 
-  // Real-time multi-device synchronization via Supabase Channels
+  // Real-time synchronization via Supabase (Handles Listening)
   useEffect(() => {
     const channel = supabase.channel('pizza-party', {
-      config: { broadcast: { self: false } } // We don't need to listen to our own broadcasts
+      config: { broadcast: { self: false } }
     });
 
     channel
       .on('broadcast', { event: 'state_sync' }, ({ payload }) => {
-        // Sync full state when another device changes it
         if (payload.toppings) setToppings(payload.toppings);
         if (payload.submissions) setSubmissions(payload.submissions);
         if (payload.notices) setNotices(payload.notices);
         if (payload.status) setStatus(payload.status);
       })
       .on('broadcast', { event: 'pizza_ready_sound' }, () => {
-        // Play notification sound on client phones
         try {
           const audio = new Audio(READY_SOUND_URL);
           void audio.play().catch(() => undefined);
         } catch {}
       })
       .on('broadcast', { event: 'new_order_sound' }, () => {
-        // Play alert sound for the Admin only
         if (getCurrentRoute() === 'admin') {
           try {
             const audio = new Audio(ADMIN_SOUND_URL);
@@ -122,24 +122,28 @@ export default function App() {
       })
       .subscribe();
 
+    // Assign to Ref so send operations can use the same connection instance
+    channelRef.current = channel;
+
     return () => {
       void supabase.removeChannel(channel);
     };
   }, []);
 
-  // Helper helper to broadcast state updates to everyone
+  // Broadcast state changes using the active channel connection
   const broadcastNewState = (updated: {
     toppings: Topping[];
     submissions: Submission[];
     notices: ReadyNotice[];
     status: string;
   }) => {
-    const channel = supabase.channel('pizza-party');
-    void channel.send({
-      type: 'broadcast',
-      event: 'state_sync',
-      payload: updated,
-    });
+    if (channelRef.current) {
+      void channelRef.current.send({
+        type: 'broadcast',
+        event: 'state_sync',
+        payload: updated,
+      });
+    }
   };
 
   const navigate = (nextRoute: 'user' | 'admin') => {
@@ -184,20 +188,21 @@ export default function App() {
     };
 
     const nextSubmissions = [newSubmission, ...submissions];
-    const newStatus = `${guestName.trim()} submitted a custom pizza request.`;
+    const newStatus = `${guestName.trim()} submitted a pizza request.`;
 
     setSubmissions(nextSubmissions);
     setStatus(newStatus);
     setGuestName('');
     setSelectedToppings([]);
 
-    // Broadcast the updated state and ring the admin's bell
     broadcastNewState({ toppings, submissions: nextSubmissions, notices, status: newStatus });
     
-    void supabase.channel('pizza-party').send({
-      type: 'broadcast',
-      event: 'new_order_sound',
-    });
+    if (channelRef.current) {
+      void channelRef.current.send({
+        type: 'broadcast',
+        event: 'new_order_sound',
+      });
+    }
   };
 
   const handleAddTopping = (event: React.FormEvent) => {
@@ -238,7 +243,8 @@ export default function App() {
 
   const handleNotifyReady = (submissionId: number) => {
     const submission = submissions.find((item) => item.id === submissionId);
-    if (!submission) {
+    
+    if (!submission || submission.ready) {
       return;
     }
 
@@ -248,24 +254,40 @@ export default function App() {
 
     const notice: ReadyNotice = {
       id: Date.now(),
-      message: `${submission.guestName}'s custom pizza is ready!`,
+      message: `${submission.guestName}'s pizza is ready!`,
       timestamp: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
     };
 
     const nextNotices = [notice, ...notices].slice(0, 5);
-    const newStatus = `${submission.guestName}'s custom pizza is ready.`;
+    const newStatus = `${submission.guestName}'s pizza is ready.`;
 
     setSubmissions(nextSubmissions);
     setNotices(nextNotices);
     setStatus(newStatus);
 
-    // Broadcast state and notify other phones to ring
     broadcastNewState({ toppings, submissions: nextSubmissions, notices: nextNotices, status: newStatus });
     
-    void supabase.channel('pizza-party').send({
-      type: 'broadcast',
-      event: 'pizza_ready_sound',
-    });
+    if (channelRef.current) {
+      void channelRef.current.send({
+        type: 'broadcast',
+        event: 'pizza_ready_sound',
+      });
+    }
+  };
+
+  // Resets the pizza party, removing all submissions and alerts
+  const handleResetParty = () => {
+    if (window.confirm("Are you sure you want to clear all requests for a new pizza night?")) {
+      const nextSubmissions: Submission[] = [];
+      const nextNotices: ReadyNotice[] = [];
+      const newStatus = "The pizza board has been reset for a new session!";
+
+      setSubmissions(nextSubmissions);
+      setNotices(nextNotices);
+      setStatus(newStatus);
+
+      broadcastNewState({ toppings, submissions: nextSubmissions, notices: nextNotices, status: newStatus });
+    }
   };
 
   return (
@@ -320,7 +342,7 @@ export default function App() {
               <div className="pizza-card">
                 <div className="pizza-title">
                   <span className="dot" style={{ backgroundColor: toppingColors[0] }} />
-                  <h3>Custom pizza</h3>
+                  <h3>pizza</h3>
                 </div>
 
                 <div className="topping-list">
@@ -371,7 +393,7 @@ export default function App() {
           <section className="card">
             <div className="card-header">
               <h2>Manager board</h2>
-              <span>Manage toppings and custom pizza requests</span>
+              <span>Manage toppings and pizza requests</span>
             </div>
 
             <div className="stack">
@@ -399,13 +421,20 @@ export default function App() {
                   ))}
                 </div>
               </div>
+              
+              {/* Reset Party Trigger */}
+              <div style={{ marginTop: '1.5rem', borderTop: '1px dashed #e2e8f0', paddingTop: '1.5rem' }}>
+                <button type="button" className="primary-btn" style={{ backgroundColor: '#ef4444' }} onClick={handleResetParty}>
+                  Reset Board for New Session
+                </button>
+              </div>
             </div>
           </section>
 
           <section className="card">
             <div className="card-header">
-              <h2>Custom pizza requests</h2>
-              <span>See every custom creation and mark it ready</span>
+              <h2>pizza requests</h2>
+              <span>See every creation and mark it ready</span>
             </div>
             <div className="results-list">
               {submissions.length === 0 ? (
@@ -419,7 +448,12 @@ export default function App() {
                       {submission.ready ? <span className="pill ready-pill">Ready</span> : null}
                     </div>
                     <div className="inline-actions">
-                      <button type="button" className="ghost-btn" onClick={() => handleNotifyReady(submission.id)}>
+                      <button 
+                        type="button" 
+                        className="ghost-btn" 
+                        onClick={() => handleNotifyReady(submission.id)}
+                        disabled={submission.ready}
+                      >
                         {submission.ready ? 'Done' : 'Ready'}
                       </button>
                       <span>{submission.timestamp}</span>

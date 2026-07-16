@@ -363,7 +363,7 @@ export default function App() {
             <form onSubmit={handleSubmitChoice} className="stack">
               <label>
                 <span>What is your name?</span>
-                <input value={guestName} onChange={(event) => setGuestName(event.target.value)} placeholder="e.g. Omar" />
+                <input value={guestName} onChange={(event) => setGuestName(event.target.value)} placeholder="Who is designing this slice?" />
               </label>
 
               <div className="pizza-card">

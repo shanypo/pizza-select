@@ -78,8 +78,14 @@ export default function App() {
   const [route, setRoute] = useState<'user' | 'admin'>(getCurrentRoute);
   const [status, setStatus] = useState('Build your dream slice and share it with the group.');
 
-  // Store the active Supabase channel reference
+  // Store active channel and latest states in refs to bypass React's closure/stale-state limitations
   const channelRef = useRef<any>(null);
+  const stateRef = useRef({ toppings, submissions, notices, status });
+
+  // Keep the mutable ref perfectly updated with the latest live state values
+  useEffect(() => {
+    stateRef.current = { toppings, submissions, notices, status };
+  }, [toppings, submissions, notices, status]);
 
   // Save changes locally
   useEffect(() => {
@@ -106,6 +112,19 @@ export default function App() {
         if (payload.notices) setNotices(payload.notices);
         if (payload.status) setStatus(payload.status);
       })
+      .on('broadcast', { event: 'reset_party' }, () => {
+        // Force fully clear local cache and state instantly on all peer phones
+        window.localStorage.removeItem(STORAGE_KEY);
+        setToppings(defaultToppings);
+        setSubmissions([]);
+        setNotices([]);
+        setStatus("The pizza board has been reset for a new session!");
+      })
+      .on('broadcast', { event: 'request_state' }, () => {
+        if (getCurrentRoute() === 'admin') {
+          broadcastNewState(stateRef.current);
+        }
+      })
       .on('broadcast', { event: 'pizza_ready_sound' }, () => {
         try {
           const audio = new Audio(READY_SOUND_URL);
@@ -119,10 +138,17 @@ export default function App() {
             void audio.play().catch(() => undefined);
           } catch {}
         }
-      })
-      .subscribe();
+      });
 
-    // Assign to Ref so send operations can use the same connection instance
+    channel.subscribe((status) => {
+      if (status === 'SUBSCRIBED' && getCurrentRoute() === 'user') {
+        void channel.send({
+          type: 'broadcast',
+          event: 'request_state',
+        });
+      }
+    });
+
     channelRef.current = channel;
 
     return () => {
@@ -130,7 +156,7 @@ export default function App() {
     };
   }, []);
 
-  // Broadcast state changes using the active channel connection
+  // Helper helper to broadcast state changes
   const broadcastNewState = (updated: {
     toppings: Topping[];
     submissions: Submission[];
@@ -275,18 +301,25 @@ export default function App() {
     }
   };
 
-  // Resets the pizza party, removing all submissions and alerts
+  // Resets the party state locally, in local storage, and broadcasts a direct wipe command to clients
   const handleResetParty = () => {
-    if (window.confirm("Are you sure you want to clear all requests for a new pizza night?")) {
-      const nextSubmissions: Submission[] = [];
-      const nextNotices: ReadyNotice[] = [];
-      const newStatus = "The pizza board has been reset for a new session!";
+    if (window.confirm("Are you sure you want to clear all requests and restore default toppings for a new session?")) {
+      // Clear Local Storage Cache
+      window.localStorage.removeItem(STORAGE_KEY);
 
-      setSubmissions(nextSubmissions);
-      setNotices(nextNotices);
-      setStatus(newStatus);
+      // Reset Local State
+      setToppings(defaultToppings);
+      setSubmissions([]);
+      setNotices([]);
+      setStatus("The pizza board has been reset for a new session!");
 
-      broadcastNewState({ toppings, submissions: nextSubmissions, notices: nextNotices, status: newStatus });
+      // Force instant hard reset command to all peer client browsers
+      if (channelRef.current) {
+        void channelRef.current.send({
+          type: 'broadcast',
+          event: 'reset_party',
+        });
+      }
     }
   };
 
@@ -422,10 +455,10 @@ export default function App() {
                 </div>
               </div>
               
-              {/* Reset Party Trigger */}
+              {/* Reset Pizza Night Button */}
               <div style={{ marginTop: '1.5rem', borderTop: '1px dashed #e2e8f0', paddingTop: '1.5rem' }}>
                 <button type="button" className="primary-btn" style={{ backgroundColor: '#ef4444' }} onClick={handleResetParty}>
-                  Reset Board for New Session
+                  Reset Pizza Night
                 </button>
               </div>
             </div>

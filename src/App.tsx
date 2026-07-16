@@ -231,9 +231,8 @@ export default function App() {
     return submissions.reduce((sum, submission) => sum + submission.toppings.length, 0);
   }, [submissions]);
 
+  // Clean, completely silent toggle!
   const toggleSelection = (toppingId: number) => {
-    // We can run a tiny low-volume chime on interaction to instantly bypass mobile browser mute blocks!
-    playReadySound(); 
     setSelectedToppings((prev) =>
       prev.includes(toppingId) ? prev.filter((item) => item !== toppingId) : [...prev, toppingId],
     );
@@ -440,7 +439,6 @@ export default function App() {
                       className={`topping-option ${selectedToppings.includes(topping.id) ? 'selected' : ''}`}
                       style={{ borderColor: selectedToppings.includes(topping.id) ? topping.color : '#eae5dc' }}
                       onClick={() => {
-                        // Triggers an initial interaction sound to instantly unlock WebAudio permissions on the phone
                         toggleSelection(topping.id);
                       }}
                     >

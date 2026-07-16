@@ -6,8 +6,9 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-const READY_SOUND_URL = 'https://actions.google.com/sounds/v1/notification/soft_bell.ogg';
-const ADMIN_SOUND_URL = 'https://actions.google.com/sounds/v1/alarms/positive.ogg';
+// Robust, high-quality public sound effects
+const READY_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2869/2869-200.wav'; // Soft, warm bell
+const ADMIN_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2019/2019-200.wav'; // Cheerful retro order chime
 
 type Topping = {
   id: number;
@@ -95,8 +96,29 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePop);
   }, []);
 
-  // Real-time synchronization
+ // Real-time synchronization & Interactive Audio Setup
   useEffect(() => {
+    // 1. Silent Pre-load to bypass aggressive browser autoplay blocks
+    const unlockAudio = () => {
+      const readyAudio = new Audio(READY_SOUND_URL);
+      const adminAudio = new Audio(ADMIN_SOUND_URL);
+      
+      // Set volume to 0, play and pause instantly to "wake up" the browser audio context
+      readyAudio.volume = 0;
+      adminAudio.volume = 0;
+      
+      void readyAudio.play().then(() => readyAudio.pause()).catch(() => undefined);
+      void adminAudio.play().then(() => adminAudio.pause()).catch(() => undefined);
+      
+      // Remove listeners once unlocked
+      window.removeEventListener('click', unlockAudio);
+      window.removeEventListener('touchstart', unlockAudio);
+    };
+
+    window.addEventListener('click', unlockAudio);
+    window.addEventListener('touchstart', unlockAudio);
+
+    // 2. Real-time Channel Setup
     const channel = supabase.channel('pizza-party', {
       config: { broadcast: { self: false } }
     });
@@ -123,15 +145,21 @@ export default function App() {
       .on('broadcast', { event: 'pizza_ready_sound' }, () => {
         try {
           const audio = new Audio(READY_SOUND_URL);
-          void audio.play().catch(() => undefined);
-        } catch {}
+          audio.volume = 0.8;
+          void audio.play().catch((err) => console.log("Audio play blocked:", err));
+        } catch (err) {
+          console.error("Audio error:", err);
+        }
       })
       .on('broadcast', { event: 'new_order_sound' }, () => {
         if (getCurrentRoute() === 'admin') {
           try {
             const audio = new Audio(ADMIN_SOUND_URL);
-            void audio.play().catch(() => undefined);
-          } catch {}
+            audio.volume = 0.8;
+            void audio.play().catch((err) => console.log("Audio play blocked:", err));
+          } catch (err) {
+            console.error("Audio error:", err);
+          }
         }
       });
 
@@ -147,6 +175,8 @@ export default function App() {
     channelRef.current = channel;
 
     return () => {
+      window.removeEventListener('click', unlockAudio);
+      window.removeEventListener('touchstart', unlockAudio);
       void supabase.removeChannel(channel);
     };
   }, []);
@@ -431,7 +461,7 @@ export default function App() {
                   <span>Introduce a new ingredient</span>
                   <input value={newTopping} onChange={(event) => setNewTopping(event.target.value)} placeholder="e.g. Fresh Basil" />
                 </label>
-                <button className="primary-btn" type="submit">Stock Ingredient</button>
+                <button className="primary-btn" type="submit">Add Topping</button>
               </form>
 
               <div className="menu-section">

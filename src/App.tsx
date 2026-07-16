@@ -137,9 +137,9 @@ export default function App() {
   const [selectedToppings, setSelectedToppings] = useState<number[]>([]);
   const [newTopping, setNewTopping] = useState('');
   const [route, setRoute] = useState<'user' | 'admin'>(getCurrentRoute);
-  const [status, setStatus] = useState('Design your dream slice below and send it straight to the oven!');
+  const [status, setStatus] = useState('Build your custom slice below and send it straight to the oven!');
   
-  // Audio Permission / Interaction Tracking
+  // Audio Permission Tracking
   const [soundEnabled, setSoundEnabled] = useState(false);
 
   const channelRef = useRef<any>(null);
@@ -177,7 +177,7 @@ export default function App() {
         setToppings(defaultToppings);
         setSubmissions([]);
         setNotices([]);
-        setStatus("Welcome! The board has been cleared and prepared for a new pizza session.");
+        setStatus("The party has been reset! Ready to take new orders.");
       })
       .on('broadcast', { event: 'request_state' }, () => {
         if (getCurrentRoute() === 'admin') {
@@ -233,7 +233,6 @@ export default function App() {
   // Count total pizzas ordered (from submissions)
   const totalPizzas = submissions.length;
 
-  // Silent topping select (no sound interaction blocker)
   const toggleSelection = (toppingId: number) => {
     setSelectedToppings((prev) =>
       prev.includes(toppingId) ? prev.filter((item) => item !== toppingId) : [...prev, toppingId],
@@ -242,7 +241,6 @@ export default function App() {
 
   const enableSoundsClick = () => {
     setSoundEnabled(true);
-    // Directly plays a quick audio test to gain immediate authorization
     playAdminSound();
   };
 
@@ -255,7 +253,7 @@ export default function App() {
     }
 
     if (selectedToppings.length === 0) {
-      setStatus("Don't forget to pick at least one delicious topping!");
+      setStatus("Don't forget to pick at least one topping!");
       return;
     }
 
@@ -272,7 +270,7 @@ export default function App() {
     };
 
     const nextSubmissions = [newSubmission, ...submissions];
-    const newStatus = `Hooray! ${guestName.trim()}'s custom slice is now in the oven.`;
+    const newStatus = `Hooray! ${guestName.trim()}'s order is now in the oven queue.`;
 
     setSubmissions(nextSubmissions);
     setStatus(newStatus);
@@ -294,7 +292,7 @@ export default function App() {
 
     const value = newTopping.trim();
     if (!value) {
-      setStatus('Let us know what yummy topping you want to add.');
+      setStatus('Please enter the name of the topping you want to add.');
       return;
     }
 
@@ -305,7 +303,7 @@ export default function App() {
     };
 
     const nextToppings = [...toppings, newItem];
-    const newStatus = `Sweet! "${value}" was added to the menu.`;
+    const newStatus = `Added "${value}" to the toppings selection.`;
 
     setToppings(nextToppings);
     setNewTopping('');
@@ -318,8 +316,8 @@ export default function App() {
     const deletedTopping = toppings.find(t => t.id === toppingId);
     const nextToppings = toppings.filter((topping) => topping.id !== toppingId);
     const newStatus = deletedTopping 
-      ? `We removed ${deletedTopping.name} from the ingredient counter.`
-      : 'Removed a topping from the counter.';
+      ? `Removed "${deletedTopping.name}" from the available toppings.`
+      : 'Removed topping.';
     
     setToppings(nextToppings);
     setSelectedToppings((prev) => prev.filter((id) => id !== toppingId));
@@ -341,18 +339,17 @@ export default function App() {
 
     const notice: ReadyNotice = {
       id: Date.now(),
-      message: `🔔 Ding! ${submission.guestName}'s pizza slice is ready!`,
+      message: `🔔 Ding! ${submission.guestName}'s pizza is ready!`,
       timestamp: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
     };
 
     const nextNotices = [notice, ...notices].slice(0, 5);
-    const newStatus = `Hot and fresh! ${submission.guestName}'s pizza is ready to be enjoyed!`;
+    const newStatus = `Hot and fresh! ${submission.guestName}'s pizza is ready!`;
 
     setSubmissions(nextSubmissions);
     setNotices(nextNotices);
     setStatus(newStatus);
 
-    // Play local sound
     playReadySound();
 
     broadcastNewState({ toppings, submissions: nextSubmissions, notices: nextNotices, status: newStatus });
@@ -373,7 +370,7 @@ export default function App() {
       setToppings(nextToppings);
       setSubmissions([]);
       setNotices([]);
-      setStatus("The table is wiped clean! Welcome to a brand new pizza session.");
+      setStatus("The board has been cleared! Ready for a new pizza round.");
 
       if (channelRef.current) {
         void channelRef.current.send({
@@ -390,7 +387,7 @@ export default function App() {
         <div>
           <p className="eyebrow">Select & Slice</p>
           <h1>Pizza Party Picks</h1>
-          <p className="subtitle">Choose your favorite toppings, and let the host know how to build your perfect slice!</p>
+          <p className="subtitle">Choose your toppings, submit your customized slice, and we will get it in the oven!</p>
         </div>
         {route === 'admin' ? (
           <div className="hero-actions">
@@ -410,7 +407,7 @@ export default function App() {
         <div className="grid-layout">
           <section className="card">
             <div className="card-header">
-              <h2>Design Your Slice</h2>
+              <h2>Build Your Pizza</h2>
               <span>
                 {totalPizzas === 0 
                   ? 'No pizzas ordered yet' 
@@ -422,7 +419,7 @@ export default function App() {
 
             <div className="notice-stack">
               {notices.length === 0 ? (
-                <p className="muted">The chef is preparing the oven...</p>
+                <p className="muted">The oven is preheating... 🔥</p>
               ) : (
                 notices.slice(0, 3).map((notice) => (
                   <div key={notice.id} className="notice-pill">
@@ -436,13 +433,13 @@ export default function App() {
             <form onSubmit={handleSubmitChoice} className="stack">
               <label>
                 <span>What is your name?</span>
-                <input value={guestName} onChange={(event) => setGuestName(event.target.value)} placeholder="Your name, pizza lover! ✨" />
+                <input value={guestName} onChange={(event) => setGuestName(event.target.value)} placeholder="Enter your name... ✨" />
               </label>
 
               <div className="pizza-card">
                 <div className="pizza-title" style={{ marginBottom: '12px' }}>
                   <span className="dot" style={{ backgroundColor: toppingColors[0] }} />
-                  <span style={{ fontWeight: 600, color: '#4a4238' }}>Interactive Counter</span>
+                  <span style={{ fontWeight: 600, color: '#4a4238' }}>Toppings Bar</span>
                 </div>
 
                 <div className="topping-list">
@@ -466,24 +463,34 @@ export default function App() {
                 </div>
               </div>
 
-              <button className="primary-btn" type="submit">Send to Chef's Board 🍕</button>
+              {/* Friendly, dynamic submission button helper */}
+              <button 
+                className="primary-btn" 
+                type="submit"
+                style={{
+                  backgroundColor: !guestName.trim() ? '#8e8476' : '#443c33',
+                  transition: 'background-color 0.3s ease'
+                }}
+              >
+                {!guestName.trim() ? 'Tell us your name first! 🍕' : "Send to Chef's Board 🍕"}
+              </button>
             </form>
           </section>
 
           <section className="card">
             <div className="card-header">
-              <h2>Joined Friends</h2>
-              <span>In-the-works</span>
+              <h2>Who's Ordered</h2>
+              <span>Oven Queue Preview</span>
             </div>
             <div className="results-list">
               {submissions.length === 0 ? (
-                <p className="muted">No orders placed yet. Be the first!</p>
+                <p className="muted">No orders submitted yet. Be the first to order!</p>
               ) : (
                 submissions.map((submission) => (
                   <div key={submission.id} className="submission-row">
                     <div>
                       <strong>{submission.guestName}</strong>
-                      <p>{submission.toppings.length > 0 ? submission.toppings.join(', ') : 'Simple Cheese Slice'}</p>
+                      <p>{submission.toppings.length > 0 ? submission.toppings.join(', ') : 'Plain Cheese Pizza'}</p>
                     </div>
                     <span>{submission.timestamp}</span>
                   </div>
@@ -497,11 +504,10 @@ export default function App() {
           <section className="card">
             <div className="card-header">
               <h2>Host Dashboard</h2>
-              <span>Ingredients Board</span>
+              <span>Manage Toppings Menu</span>
             </div>
 
             <div className="stack">
-              {/* Interaction sound bypass control banner */}
               <div 
                 style={{
                   background: soundEnabled ? '#e6f4ea' : '#fce8e6',
@@ -516,7 +522,7 @@ export default function App() {
                   border: `1px solid ${soundEnabled ? '#81c995' : '#f28b82'}`
                 }}
               >
-                <span>{soundEnabled ? '🔔 Sound Alerts Active' : '🔇 Audio Blocked by Browser'}</span>
+                <span>{soundEnabled ? '🔔 Alert Sounds Active' : '🔇 Audio Blocked by Browser'}</span>
                 {!soundEnabled && (
                   <button 
                     type="button" 
@@ -532,21 +538,21 @@ export default function App() {
                       fontWeight: 'bold'
                     }}
                   >
-                    Click to Enable Sounds
+                    Enable Sound Alerts
                   </button>
                 )}
               </div>
 
               <form onSubmit={handleAddTopping} className="stack">
                 <label>
-                  <span>Introduce a new ingredient</span>
-                  <input value={newTopping} onChange={(event) => setNewTopping(event.target.value)} placeholder="e.g. Fresh Basil" />
+                  <span>Add a new topping to the menu</span>
+                  <input value={newTopping} onChange={(event) => setNewTopping(event.target.value)} placeholder="e.g. Fresh Mushrooms" />
                 </label>
                 <button className="primary-btn" type="submit">Add Topping</button>
               </form>
 
               <div className="menu-section">
-                <h3>Counter Ingredients</h3>
+                <h3>Available Toppings</h3>
                 <div className="chip-list">
                   {toppings.map((topping) => (
                     <div key={topping.id} className="chip-row">
@@ -555,7 +561,7 @@ export default function App() {
                         {topping.name}
                       </span>
                       <button type="button" className="ghost-btn danger" onClick={() => handleDeleteTopping(topping.id)}>
-                        Discard
+                        Remove
                       </button>
                     </div>
                   ))}
@@ -573,17 +579,17 @@ export default function App() {
           <section className="card">
             <div className="card-header">
               <h2>The Oven Queue</h2>
-              <span>Live Orders</span>
+              <span>Active Orders</span>
             </div>
             <div className="results-list">
               {submissions.length === 0 ? (
-                <p className="muted">No orders in the queue yet. Light the fire! 🔥</p>
+                <p className="muted">No active pizza orders yet. Fire up the oven! 🔥</p>
               ) : (
                 submissions.slice(0, 8).map((submission) => (
                   <div key={submission.id} className="submission-row">
                     <div>
                       <strong>{submission.guestName}</strong>
-                      <p>{submission.toppings.join(', ') || 'Simple Cheese Slice'}</p>
+                      <p>{submission.toppings.join(', ') || 'Plain Cheese Pizza'}</p>
                       {submission.ready ? <span className="ready-pill">Baked</span> : null}
                     </div>
                     <div className="inline-actions">

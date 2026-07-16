@@ -30,13 +30,13 @@ type ReadyNotice = {
 };
 
 const STORAGE_KEY = 'select-and-slice-state-v3';
-const toppingColors = ['#ff7a59', '#4f46e5', '#16a34a', '#d946ef', '#f59e0b', '#0f766e'];
+const toppingColors = ['#e07a5f', '#3d5a80', '#81b29a', '#b5838d', '#f4a261', '#5f0f40'];
 
 const defaultToppings: Topping[] = [
-  { id: 1, name: 'Pepperoni', color: toppingColors[0] },
-  { id: 2, name: 'Mushrooms', color: toppingColors[1] },
-  { id: 3, name: 'Extra cheese', color: toppingColors[2] },
-  { id: 4, name: 'Olives', color: toppingColors[3] },
+  { id: 1, name: 'פלפל חריף', color: toppingColors[0] },
+  { id: 2, name: 'בצל סגול', color: toppingColors[1] },
+  { id: 3, name: 'זיתים', color: toppingColors[2] },
+  { id: 4, name: 'בזיליקום', color: toppingColors[3] },
 ];
 
 function loadState() {
@@ -76,30 +76,26 @@ export default function App() {
   const [selectedToppings, setSelectedToppings] = useState<number[]>([]);
   const [newTopping, setNewTopping] = useState('');
   const [route, setRoute] = useState<'user' | 'admin'>(getCurrentRoute);
-  const [status, setStatus] = useState('Build your dream slice and share it with the group.');
+  const [status, setStatus] = useState('Design your dream slice below and send it straight to the oven!');
 
-  // Store active channel and latest states in refs to bypass React's closure/stale-state limitations
   const channelRef = useRef<any>(null);
   const stateRef = useRef({ toppings, submissions, notices, status });
 
-  // Keep the mutable ref perfectly updated with the latest live state values
   useEffect(() => {
     stateRef.current = { toppings, submissions, notices, status };
   }, [toppings, submissions, notices, status]);
 
-  // Save changes locally
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ toppings, submissions, notices }));
   }, [toppings, submissions, notices]);
 
-  // Handle routing
   useEffect(() => {
     const handlePop = () => setRoute(getCurrentRoute());
     window.addEventListener('popstate', handlePop);
     return () => window.removeEventListener('popstate', handlePop);
   }, []);
 
-  // Real-time synchronization via Supabase (Handles Listening)
+  // Real-time synchronization
   useEffect(() => {
     const channel = supabase.channel('pizza-party', {
       config: { broadcast: { self: false } }
@@ -113,12 +109,11 @@ export default function App() {
         if (payload.status) setStatus(payload.status);
       })
       .on('broadcast', { event: 'reset_party' }, () => {
-        // Force fully clear local cache and state instantly on all peer phones
         window.localStorage.removeItem(STORAGE_KEY);
         setToppings(defaultToppings);
         setSubmissions([]);
         setNotices([]);
-        setStatus("The pizza board has been reset for a new session!");
+        setStatus("Welcome! The board has been cleared and prepared for a new pizza session.");
       })
       .on('broadcast', { event: 'request_state' }, () => {
         if (getCurrentRoute() === 'admin') {
@@ -156,7 +151,6 @@ export default function App() {
     };
   }, []);
 
-  // Helper helper to broadcast state changes
   const broadcastNewState = (updated: {
     toppings: Topping[];
     submissions: Submission[];
@@ -192,12 +186,12 @@ export default function App() {
     event.preventDefault();
 
     if (!guestName.trim()) {
-      setStatus('Please enter your name first.');
+      setStatus('Could you tell us your name first? 😊');
       return;
     }
 
     if (selectedToppings.length === 0) {
-      setStatus('Please choose at least one topping.');
+      setStatus("Don't forget to pick at least one delicious topping!");
       return;
     }
 
@@ -214,7 +208,7 @@ export default function App() {
     };
 
     const nextSubmissions = [newSubmission, ...submissions];
-    const newStatus = `${guestName.trim()} submitted a pizza request.`;
+    const newStatus = `Hooray! ${guestName.trim()}'s custom slice is now in the oven.`;
 
     setSubmissions(nextSubmissions);
     setStatus(newStatus);
@@ -236,7 +230,7 @@ export default function App() {
 
     const value = newTopping.trim();
     if (!value) {
-      setStatus('Type a topping name first.');
+      setStatus('Let us know what yummy topping you want to add.');
       return;
     }
 
@@ -247,7 +241,7 @@ export default function App() {
     };
 
     const nextToppings = [...toppings, newItem];
-    const newStatus = `${value} was added to the topping list.`;
+    const newStatus = `Sweet! "${value}" was added to the menu.`;
 
     setToppings(nextToppings);
     setNewTopping('');
@@ -257,8 +251,11 @@ export default function App() {
   };
 
   const handleDeleteTopping = (toppingId: number) => {
+    const deletedTopping = toppings.find(t => t.id === toppingId);
     const nextToppings = toppings.filter((topping) => topping.id !== toppingId);
-    const newStatus = 'A topping was removed from the menu.';
+    const newStatus = deletedTopping 
+      ? `We removed ${deletedTopping.name} from the ingredient counter.`
+      : 'Removed a topping from the counter.';
     
     setToppings(nextToppings);
     setSelectedToppings((prev) => prev.filter((id) => id !== toppingId));
@@ -280,12 +277,12 @@ export default function App() {
 
     const notice: ReadyNotice = {
       id: Date.now(),
-      message: `${submission.guestName}'s pizza is ready!`,
+      message: `🔔 Ding! ${submission.guestName}'s pizza slice is ready!`,
       timestamp: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
     };
 
     const nextNotices = [notice, ...notices].slice(0, 5);
-    const newStatus = `${submission.guestName}'s pizza is ready.`;
+    const newStatus = `Hot and fresh! ${submission.guestName}'s pizza is ready to be enjoyed!`;
 
     setSubmissions(nextSubmissions);
     setNotices(nextNotices);
@@ -301,19 +298,16 @@ export default function App() {
     }
   };
 
-  // Resets the party state locally, in local storage, and broadcasts a direct wipe command to clients
   const handleResetParty = () => {
-    if (window.confirm("Are you sure you want to clear all requests and restore default toppings for a new session?")) {
-      // Clear Local Storage Cache
+    if (window.confirm("Are you sure you want to clear all requests and start a fresh Pizza Night? 🍕")) {
       window.localStorage.removeItem(STORAGE_KEY);
-
-      // Reset Local State
-      setToppings(defaultToppings);
+      
+      const nextToppings = defaultToppings;
+      setToppings(nextToppings);
       setSubmissions([]);
       setNotices([]);
-      setStatus("The pizza board has been reset for a new session!");
+      setStatus("The table is wiped clean! Welcome to a brand new pizza session.");
 
-      // Force instant hard reset command to all peer client browsers
       if (channelRef.current) {
         void channelRef.current.send({
           type: 'broadcast',
@@ -329,15 +323,15 @@ export default function App() {
         <div>
           <p className="eyebrow">Select & Slice</p>
           <h1>Pizza Party Picks</h1>
-          <p className="subtitle">Friends build their dream slice, and the manager keeps the full topping story in one place.</p>
+          <p className="subtitle">Choose your favorite toppings, and let the host know how to build your perfect slice!</p>
         </div>
         {route === 'admin' ? (
           <div className="hero-actions">
             <button className="pill" onClick={() => navigate('user')}>
-              User version
+              Guest View
             </button>
             <button className="pill active" onClick={() => navigate('admin')}>
-              Admin version
+              Host Dashboard
             </button>
           </div>
         ) : null}
@@ -349,13 +343,13 @@ export default function App() {
         <div className="grid-layout">
           <section className="card">
             <div className="card-header">
-              <h2>Build your slice</h2>
-              <span>{totalSelections} toppings selected</span>
+              <h2>Design Your Slice</h2>
+              <span>{totalSelections} delicious cravings</span>
             </div>
 
             <div className="notice-stack">
               {notices.length === 0 ? (
-                <p className="muted">No pizza is ready yet.</p>
+                <p className="muted">The chef is preparing the oven...</p>
               ) : (
                 notices.slice(0, 3).map((notice) => (
                   <div key={notice.id} className="notice-pill">
@@ -368,14 +362,14 @@ export default function App() {
 
             <form onSubmit={handleSubmitChoice} className="stack">
               <label>
-                <span>Your name</span>
+                <span>What is your name?</span>
                 <input value={guestName} onChange={(event) => setGuestName(event.target.value)} placeholder="e.g. Omar" />
               </label>
 
               <div className="pizza-card">
-                <div className="pizza-title">
+                <div className="pizza-title" style={{ marginBottom: '12px' }}>
                   <span className="dot" style={{ backgroundColor: toppingColors[0] }} />
-                  <h3>pizza</h3>
+                  <span style={{ fontWeight: 600, color: '#4a4238' }}>Interactive Counter</span>
                 </div>
 
                 <div className="topping-list">
@@ -384,35 +378,37 @@ export default function App() {
                       key={topping.id}
                       type="button"
                       className={`topping-option ${selectedToppings.includes(topping.id) ? 'selected' : ''}`}
-                      style={{ borderColor: topping.color }}
+                      style={{ borderColor: selectedToppings.includes(topping.id) ? topping.color : '#eae5dc' }}
                       onClick={() => toggleSelection(topping.id)}
                     >
-                      <span className="dot" style={{ backgroundColor: topping.color }} />
-                      <span>{topping.name}</span>
-                      <strong>Select</strong>
+                      <span className="chip-name">
+                        <span className="dot" style={{ backgroundColor: topping.color }} />
+                        <span>{topping.name}</span>
+                      </span>
+                      <strong>{selectedToppings.includes(topping.id) ? 'Selected ✓' : 'Add'}</strong>
                     </button>
                   ))}
                 </div>
               </div>
 
-              <button className="primary-btn" type="submit">Send this pizza</button>
+              <button className="primary-btn" type="submit">Send to Chef's Board 🍕</button>
             </form>
           </section>
 
           <section className="card">
             <div className="card-header">
-              <h2>Live toppings</h2>
-              <span>See what others chose</span>
+              <h2>Joined Friends</h2>
+              <span>In-the-works</span>
             </div>
             <div className="results-list">
               {submissions.length === 0 ? (
-                <p className="muted">No pizza choices yet.</p>
+                <p className="muted">No orders placed yet. Be the first!</p>
               ) : (
                 submissions.map((submission) => (
                   <div key={submission.id} className="submission-row">
                     <div>
                       <strong>{submission.guestName}</strong>
-                      <p>{submission.toppings.length > 0 ? submission.toppings.join(', ') : 'No toppings selected'}</p>
+                      <p>{submission.toppings.length > 0 ? submission.toppings.join(', ') : 'Simple Cheese Slice'}</p>
                     </div>
                     <span>{submission.timestamp}</span>
                   </div>
@@ -425,21 +421,21 @@ export default function App() {
         <div className="grid-layout">
           <section className="card">
             <div className="card-header">
-              <h2>Manager board</h2>
-              <span>Manage toppings and pizza requests</span>
+              <h2>Host Dashboard</h2>
+              <span>Ingredients Board</span>
             </div>
 
             <div className="stack">
               <form onSubmit={handleAddTopping} className="stack">
                 <label>
-                  <span>New topping</span>
-                  <input value={newTopping} onChange={(event) => setNewTopping(event.target.value)} placeholder="e.g. Jalapeños" />
+                  <span>Introduce a new ingredient</span>
+                  <input value={newTopping} onChange={(event) => setNewTopping(event.target.value)} placeholder="e.g. Fresh Basil" />
                 </label>
-                <button className="primary-btn" type="submit">Add topping</button>
+                <button className="primary-btn" type="submit">Stock Ingredient</button>
               </form>
 
               <div className="menu-section">
-                <h3>Current toppings</h3>
+                <h3>Counter Ingredients</h3>
                 <div className="chip-list">
                   {toppings.map((topping) => (
                     <div key={topping.id} className="chip-row">
@@ -447,17 +443,17 @@ export default function App() {
                         <span className="dot" style={{ backgroundColor: topping.color }} />
                         {topping.name}
                       </span>
-                      <button type="button" className="ghost-btn" onClick={() => handleDeleteTopping(topping.id)}>
-                        Remove
+                      <button type="button" className="ghost-btn danger" onClick={() => handleDeleteTopping(topping.id)}>
+                        Discard
                       </button>
                     </div>
                   ))}
                 </div>
               </div>
               
-              {/* Reset Pizza Night Button */}
-              <div style={{ marginTop: '1.5rem', borderTop: '1px dashed #e2e8f0', paddingTop: '1.5rem' }}>
-                <button type="button" className="primary-btn" style={{ backgroundColor: '#ef4444' }} onClick={handleResetParty}>
+              {/* Redesigned Reset Container */}
+              <div className="reset-container">
+                <button type="button" className="reset-btn" onClick={handleResetParty}>
                   Reset Pizza Night
                 </button>
               </div>
@@ -466,19 +462,19 @@ export default function App() {
 
           <section className="card">
             <div className="card-header">
-              <h2>pizza requests</h2>
-              <span>See every creation and mark it ready</span>
+              <h2>The Oven Queue</h2>
+              <span>Live Orders</span>
             </div>
             <div className="results-list">
               {submissions.length === 0 ? (
-                <p className="muted">No submissions yet.</p>
+                <p className="muted">No orders in the queue yet. Light the fire! 🔥</p>
               ) : (
                 submissions.slice(0, 8).map((submission) => (
                   <div key={submission.id} className="submission-row">
                     <div>
                       <strong>{submission.guestName}</strong>
-                      <p>{submission.toppings.join(', ') || 'No toppings selected'}</p>
-                      {submission.ready ? <span className="pill ready-pill">Ready</span> : null}
+                      <p>{submission.toppings.join(', ') || 'Simple Cheese Slice'}</p>
+                      {submission.ready ? <span className="ready-pill">Baked</span> : null}
                     </div>
                     <div className="inline-actions">
                       <button 
@@ -487,7 +483,7 @@ export default function App() {
                         onClick={() => handleNotifyReady(submission.id)}
                         disabled={submission.ready}
                       >
-                        {submission.ready ? 'Done' : 'Ready'}
+                        {submission.ready ? 'Served' : 'Mark Ready'}
                       </button>
                       <span>{submission.timestamp}</span>
                     </div>

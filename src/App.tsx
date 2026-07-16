@@ -1,4 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
+import { createClient } from '@supabase/supabase-js';
+
+// 1. Initialize Supabase Client using Vite environment variables
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 const READY_SOUND_URL = 'https://actions.google.com/sounds/v1/notification/soft_bell.ogg';
 const ADMIN_SOUND_URL = 'https://actions.google.com/sounds/v1/alarms/positive.ogg';
@@ -59,7 +65,6 @@ function getCurrentRoute() {
   if (typeof window === 'undefined') {
     return 'user' as const;
   }
-
   return window.location.pathname.startsWith('/admin') ? ('admin' as const) : ('user' as const);
 }
 
@@ -73,15 +78,69 @@ export default function App() {
   const [route, setRoute] = useState<'user' | 'admin'>(getCurrentRoute);
   const [status, setStatus] = useState('Build your dream slice and share it with the group.');
 
+  // Save changes locally as back-up
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ toppings, submissions, notices }));
   }, [toppings, submissions, notices]);
 
+  // Handle browser back/forward routing
   useEffect(() => {
     const handlePop = () => setRoute(getCurrentRoute());
     window.addEventListener('popstate', handlePop);
     return () => window.removeEventListener('popstate', handlePop);
   }, []);
+
+  // Real-time multi-device synchronization via Supabase Channels
+  useEffect(() => {
+    const channel = supabase.channel('pizza-party', {
+      config: { broadcast: { self: false } } // We don't need to listen to our own broadcasts
+    });
+
+    channel
+      .on('broadcast', { event: 'state_sync' }, ({ payload }) => {
+        // Sync full state when another device changes it
+        if (payload.toppings) setToppings(payload.toppings);
+        if (payload.submissions) setSubmissions(payload.submissions);
+        if (payload.notices) setNotices(payload.notices);
+        if (payload.status) setStatus(payload.status);
+      })
+      .on('broadcast', { event: 'pizza_ready_sound' }, () => {
+        // Play notification sound on client phones
+        try {
+          const audio = new Audio(READY_SOUND_URL);
+          void audio.play().catch(() => undefined);
+        } catch {}
+      })
+      .on('broadcast', { event: 'new_order_sound' }, () => {
+        // Play alert sound for the Admin only
+        if (getCurrentRoute() === 'admin') {
+          try {
+            const audio = new Audio(ADMIN_SOUND_URL);
+            void audio.play().catch(() => undefined);
+          } catch {}
+        }
+      })
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // Helper helper to broadcast state updates to everyone
+  const broadcastNewState = (updated: {
+    toppings: Topping[];
+    submissions: Submission[];
+    notices: ReadyNotice[];
+    status: string;
+  }) => {
+    const channel = supabase.channel('pizza-party');
+    void channel.send({
+      type: 'broadcast',
+      event: 'state_sync',
+      payload: updated,
+    });
+  };
 
   const navigate = (nextRoute: 'user' | 'admin') => {
     setRoute(nextRoute);
@@ -116,29 +175,29 @@ export default function App() {
       .filter((topping) => selectedToppings.includes(topping.id))
       .map((topping) => topping.name);
 
-    setSubmissions((prev) => [
-      {
-        id: Date.now(),
-        guestName: guestName.trim(),
-        toppings: chosenToppingNames,
-        timestamp: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
-        ready: false,
-      },
-      ...prev,
-    ]);
+    const newSubmission: Submission = {
+      id: Date.now(),
+      guestName: guestName.trim(),
+      toppings: chosenToppingNames,
+      timestamp: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
+      ready: false,
+    };
 
-    setStatus(`${guestName.trim()} submitted a custom pizza request.`);
+    const nextSubmissions = [newSubmission, ...submissions];
+    const newStatus = `${guestName.trim()} submitted a custom pizza request.`;
+
+    setSubmissions(nextSubmissions);
+    setStatus(newStatus);
     setGuestName('');
     setSelectedToppings([]);
 
-    if (route === 'admin' && typeof window !== 'undefined') {
-      try {
-        const audio = new Audio(ADMIN_SOUND_URL);
-        void audio.play().catch(() => undefined);
-      } catch {
-        // ignore browser autoplay restrictions
-      }
-    }
+    // Broadcast the updated state and ring the admin's bell
+    broadcastNewState({ toppings, submissions: nextSubmissions, notices, status: newStatus });
+    
+    void supabase.channel('pizza-party').send({
+      type: 'broadcast',
+      event: 'new_order_sound',
+    });
   };
 
   const handleAddTopping = (event: React.FormEvent) => {
@@ -156,15 +215,25 @@ export default function App() {
       color: toppingColors[toppings.length % toppingColors.length],
     };
 
-    setToppings((prev) => [...prev, newItem]);
+    const nextToppings = [...toppings, newItem];
+    const newStatus = `${value} was added to the topping list.`;
+
+    setToppings(nextToppings);
     setNewTopping('');
-    setStatus(`${value} was added to the topping list.`);
+    setStatus(newStatus);
+
+    broadcastNewState({ toppings: nextToppings, submissions, notices, status: newStatus });
   };
 
   const handleDeleteTopping = (toppingId: number) => {
-    setToppings((prev) => prev.filter((topping) => topping.id !== toppingId));
+    const nextToppings = toppings.filter((topping) => topping.id !== toppingId);
+    const newStatus = 'A topping was removed from the menu.';
+    
+    setToppings(nextToppings);
     setSelectedToppings((prev) => prev.filter((id) => id !== toppingId));
-    setStatus('A topping was removed from the menu.');
+    setStatus(newStatus);
+
+    broadcastNewState({ toppings: nextToppings, submissions, notices, status: newStatus });
   };
 
   const handleNotifyReady = (submissionId: number) => {
@@ -173,8 +242,8 @@ export default function App() {
       return;
     }
 
-    setSubmissions((prev) =>
-      prev.map((item) => (item.id === submissionId ? { ...item, ready: true } : item)),
+    const nextSubmissions = submissions.map((item) =>
+      item.id === submissionId ? { ...item, ready: true } : item,
     );
 
     const notice: ReadyNotice = {
@@ -183,17 +252,20 @@ export default function App() {
       timestamp: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
     };
 
-    setNotices((prev) => [notice, ...prev].slice(0, 5));
-    setStatus(`${submission.guestName}'s custom pizza is ready.`);
+    const nextNotices = [notice, ...notices].slice(0, 5);
+    const newStatus = `${submission.guestName}'s custom pizza is ready.`;
 
-    if (typeof window !== 'undefined') {
-      try {
-        const audio = new Audio(READY_SOUND_URL);
-        void audio.play().catch(() => undefined);
-      } catch {
-        // ignore browser autoplay restrictions
-      }
-    }
+    setSubmissions(nextSubmissions);
+    setNotices(nextNotices);
+    setStatus(newStatus);
+
+    // Broadcast state and notify other phones to ring
+    broadcastNewState({ toppings, submissions: nextSubmissions, notices: nextNotices, status: newStatus });
+    
+    void supabase.channel('pizza-party').send({
+      type: 'broadcast',
+      event: 'pizza_ready_sound',
+    });
   };
 
   return (

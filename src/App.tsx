@@ -144,10 +144,17 @@ export default function App() {
 
   const channelRef = useRef<any>(null);
   const stateRef = useRef({ toppings, submissions, notices, status });
+  
+  // CRITICAL FIX: Track active routing dynamically for real-time sound routing
+  const routeRef = useRef(route);
 
   useEffect(() => {
     stateRef.current = { toppings, submissions, notices, status };
   }, [toppings, submissions, notices, status]);
+
+  useEffect(() => {
+    routeRef.current = route;
+  }, [route]);
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ toppings, submissions, notices }));
@@ -180,25 +187,25 @@ export default function App() {
         setStatus("The party has been reset! Ready to take new orders.");
       })
       .on('broadcast', { event: 'request_state' }, () => {
-        if (getCurrentRoute() === 'admin') {
+        if (routeRef.current === 'admin') {
           broadcastNewState(stateRef.current);
         }
       })
       .on('broadcast', { event: 'pizza_ready_sound' }, () => {
-        // Only trigger the ready bell tone on the user interface
-        if (getCurrentRoute() === 'user') {
+        // Play ready ding only on the Guest/User view
+        if (routeRef.current === 'user') {
           playReadySound();
         }
       })
       .on('broadcast', { event: 'new_order_sound' }, () => {
-        // Only trigger the order sound alert on the host dashboard
-        if (getCurrentRoute() === 'admin') {
+        // Play order chime only on the Host/Admin dashboard
+        if (routeRef.current === 'admin') {
           playAdminSound();
         }
       });
 
     channel.subscribe((status) => {
-      if (status === 'SUBSCRIBED' && getCurrentRoute() === 'user') {
+      if (status === 'SUBSCRIBED' && routeRef.current === 'user') {
         void channel.send({
           type: 'broadcast',
           event: 'request_state',
@@ -354,8 +361,6 @@ export default function App() {
     setNotices(nextNotices);
     setStatus(newStatus);
 
-    // Removed local sound call here so the host remains silent when clicking "Mark Ready"
-
     broadcastNewState({ toppings, submissions: nextSubmissions, notices: nextNotices, status: newStatus });
     
     if (channelRef.current) {
@@ -493,6 +498,7 @@ export default function App() {
                 submissions.map((submission) => (
                   <div key={submission.id} className="submission-row">
                     <div>
+                      export default string;
                       <strong>{submission.guestName}</strong>
                       <p>{submission.toppings.length > 0 ? submission.toppings.join(', ') : 'Plain Cheese Pizza'}</p>
                     </div>

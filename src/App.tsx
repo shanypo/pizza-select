@@ -185,9 +185,13 @@ export default function App() {
         }
       })
       .on('broadcast', { event: 'pizza_ready_sound' }, () => {
-        playReadySound();
+        // Only trigger the ready bell tone on the user interface
+        if (getCurrentRoute() === 'user') {
+          playReadySound();
+        }
       })
       .on('broadcast', { event: 'new_order_sound' }, () => {
+        // Only trigger the order sound alert on the host dashboard
         if (getCurrentRoute() === 'admin') {
           playAdminSound();
         }
@@ -350,7 +354,7 @@ export default function App() {
     setNotices(nextNotices);
     setStatus(newStatus);
 
-    playReadySound();
+    // Removed local sound call here so the host remains silent when clicking "Mark Ready"
 
     broadcastNewState({ toppings, submissions: nextSubmissions, notices: nextNotices, status: newStatus });
     
